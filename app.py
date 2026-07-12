@@ -36,14 +36,13 @@
 # if __name__ == "__main__":
 #     app.run(debug=True)
 
-
 from flask import Flask, render_template, request
 import requests
 import os
 
 app = Flask(__name__)
 
-# Hugging Face Inference API
+# Hugging Face Model API
 API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
 
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -58,28 +57,75 @@ def predict_sentiment(text):
         "inputs": text
     }
 
-    response = requests.post(API_URL, headers=headers, json=payload)
+    try:
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
 
-    if response.status_code != 200:
+        print("=" * 60)
+        print("STATUS CODE:", response.status_code)
+        print("RAW RESPONSE:")
         print(response.text)
-        return None
+        print("=" * 60)
 
-    result = response.json()
+        # If API returned an error
+        if response.status_code != 200:
+            return {
+                "label": f"API Error ({response.status_code})",
+                "score": 0
+            }
 
-    # Handle different response formats
-    if isinstance(result, list):
+        result = response.json()
 
-        if len(result) > 0 and isinstance(result[0], list):
-            result = result[0]
+        # Handle Hugging Face error response
+        if isinstance(result, dict):
 
-        best = max(result, key=lambda x: x["score"])
+            if "error" in result:
+                return {
+                    "label": result["error"],
+                    "score": 0
+                }
+
+            if "estimated_time" in result:
+                return {
+                    "label": "Model is loading. Please try again in a few seconds.",
+                    "score": 0
+                }
+
+            return {
+                "label": "Unexpected API Response",
+                "score": 0
+            }
+
+        # Handle nested list response
+        if isinstance(result, list):
+
+            if len(result) > 0 and isinstance(result[0], list):
+                result = result[0]
+
+            best = max(result, key=lambda x: x["score"])
+
+            return {
+                "label": best["label"].lower(),
+                "score": round(best["score"] * 100, 2)
+            }
 
         return {
-            "label": best["label"].lower(),
-            "score": round(best["score"] * 100, 2)
+            "label": "Unknown Response",
+            "score": 0
         }
 
-    return None
+    except Exception as e:
+        print("EXCEPTION:")
+        print(str(e))
+
+        return {
+            "label": str(e),
+            "score": 0
+        }
 
 
 @app.route("/")
@@ -93,14 +139,6 @@ def predict():
     text = request.form["text"]
 
     prediction = predict_sentiment(text)
-
-    if prediction is None:
-        return render_template(
-            "index.html",
-            prediction="Error",
-            confidence=0,
-            text=text
-        )
 
     return render_template(
         "index.html",

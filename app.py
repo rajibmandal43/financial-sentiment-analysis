@@ -36,61 +36,43 @@
 # if __name__ == "__main__":
 #     app.run(debug=True)
 
+import streamlit as st
+from transformers import pipeline
 
-from flask import Flask, render_template, request
-import requests
-import os
+st.set_page_config(
+    page_title="Financial Sentiment Analysis",
+    page_icon="💹",
+)
 
-app = Flask(__name__)
+st.title("💹 Financial Sentiment Analysis")
+st.write("Powered by FinBERT")
 
-API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
-
-HF_TOKEN = os.getenv("HF_TOKEN")
-
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-
-@app.route("/predict", methods=["POST"])
-def predict():
-
-    text = request.form["text"]
-
-    response = requests.post(
-        API_URL,
-        headers=headers,
-        json={"inputs": text}
+@st.cache_resource
+def load_model():
+    return pipeline(
+        "sentiment-analysis",
+        model="ProsusAI/finbert",
+        tokenizer="ProsusAI/finbert"
     )
 
-    result = response.json()
+classifier = load_model()
 
-    if isinstance(result, dict) and "error" in result:
-        return render_template(
-            "index.html",
-            prediction="Error",
-            confidence=0,
-            text=text
-        )
+text = st.text_area(
+    "Enter financial news",
+    height=200
+)
 
-    scores = result[0]
+if st.button("Analyze Sentiment"):
 
-    best = max(scores, key=lambda x: x["score"])
+    if text.strip():
 
-    label = best["label"].lower()
-    confidence = round(best["score"] * 100, 2)
+        result = classifier(text)[0]
 
-    return render_template(
-        "index.html",
-        prediction=label,
-        confidence=confidence,
-        text=text
-    )
+        label = result["label"]
+        score = result["score"] * 100
 
+        st.success(f"Prediction: {label}")
 
-if __name__ == "__main__":
-    app.run(debug=True)
+        st.progress(int(score))
+
+        st.write(f"Confidence: {score:.2f}%")

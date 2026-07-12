@@ -1,7 +1,12 @@
+# Flask==3.1.1
+# gunicorn==23.0.0
+# torch
+# transformers==4.51.3
+# sentencepiece
+# accelerate
+# safetensors
+
+
 Flask==3.1.1
 gunicorn==23.0.0
-torch
-transformers==4.51.3
-sentencepiece
-accelerate
-safetensors
+requests==2.32.4
